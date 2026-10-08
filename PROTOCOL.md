@@ -59,7 +59,8 @@ which keeps nothing and relies on the app). `serial` may be empty.
 - `save` / `delete` are sent whatever triggered them (button on the device or command from the app),
   so the app only has to follow events. `count` in `save` is the new number of saved results.
 - `reset`: all saved results were cleared.
-- `error` `reason`: `"unplugged"` (head pulled out while measuring).
+- `error` `reason`: `"unplugged"` (head pulled out while measuring). The N2+ includes the partial
+  `time`, which can still be saved.
 
 ### `saved` — stored results (answer to `list`)
 ```json
@@ -107,8 +108,9 @@ On `status` and every 10 seconds.
 {"version":2,"type":"command","action":"status"}
 {"version":2,"type":"config","unit":"pma","brightness":60}
 ```
-- `save` / `delete` act exactly like the buttons on the device: only in `result` (N2+: delete also in
-  `error`). On the N2+ `save` fails with "storage full" when `maxSaved` results are stored. Answered by a `result`, and on success also by the matching `measurement` event.
+- `save` / `delete` act exactly like the buttons on the device: only in `result`. N2+: delete also in
+  `error`, and save too once the head is plugged back in — this stores the partial time of the
+  interrupted measurement (deliberate). On the N2+ `save` fails with "storage full" when `maxSaved` results are stored. Answered by a `result`, and on success also by the matching `measurement` event.
 - `reset` clears all saved results (`measurement` `reset` event follows).
 - `config` may carry any subset of the keys above; the device validates all of them first and
   applies all or nothing, then answers with `result` and a fresh `config`.
