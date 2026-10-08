@@ -8,6 +8,8 @@
 
 #include <stdbool.h>
 
+#include <stddef.h>
+
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include <stdbool.h>
@@ -100,5 +102,14 @@ bool measure_request_save(void);
  * @return false when there is nothing to delete, so the request was dropped
  */
 bool measure_request_delete(void);
+
+/**
+ * @brief Clear the saved-results counter (phone "reset" command)
+ * @return false while a measurement is running
+ */
+bool measure_request_reset(void);
+
+/** Write the current state as a protocol v2 "state" message. Returns snprintf's result. */
+int measure_state_json(char *buf, size_t size);
 
 #endif /* MEASURE_H */

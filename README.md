@@ -1,75 +1,49 @@
-# Sárkány Watch - Sárkányrepülő Anyag Légáteresztés Mérő
+# Porozit Watch — firmware
 
-Az ESP és az Android-app közötti BLE JSON-üzenetek leírása: [BLE_JSON_PROTOCOL.md](BLE_JSON_PROTOCOL.md).
+Firmware of the **Porozit Watch**, the wrist-size control unit of the Porozit porosity tester
+(paraglider fabric air permeability) by Hello Ltd. — [porosimeter.hu](https://porosimeter.hu).
 
-Sárkányrepülő vitorla anyagának levegőáteresztő képességét mérő hordozható eszköz ESP32-S3 alapokon.
+The watch measures the fall time, shows it in seconds or l/m²/min (`7500 / sec`) with the
+Good / Acceptable / Fail colours, and sends every result to the **Porozit app** over Bluetooth LE.
+It keeps no history itself: **Save** sends the result to the phone (so it needs a connected app),
+**Delete** discards it.
 
-## Leírás
+## Hardware
 
-A **Sárkány Watch** egy kompakt mérőeszköz, amely sárkányrepülők vitorlaanyagának légáteresztő képességét méri. Az eszköz Bluetooth kapcsolaton keresztül továbbítja a mérési adatokat okostelefonra, ahol azok feldolgozásra és elemzésre kerülnek.
+| Part | Type |
+|---|---|
+| Board | Waveshare ESP32-S3-Touch-LCD-1.69 (schematic: `ESP32-S3-Touch-LCD-1.69_V2.1.pdf`) |
+| MCU | ESP32-S3, Bluetooth 5 LE |
+| Display / touch | 1.69" ST7789 240×280, CST816S |
+| Measuring head | GPIO2 = trigger (active low), GPIO3 = head plugged in (active low) |
 
-### Főbb funkciók
+## Bluetooth
 
-- **Légáteresztés mérés**: Pontos mérés a vitorlaanyag állapotának felmérésére
-- **Bluetooth adatátvitel**: Valós idejű adatküldés okostelefonra
-- **Érintőképernyős kijelző**: Intuitív felhasználói felület LVGL keretrendszerrel
-- **Akkumulátor figyelés**: Beépített akkumulátor töltöttség monitoring
-- **Energiatakarékos üzemmód**: Hosszú üzemidő hordozható használathoz
+The protocol shared with the Porozit N2+ and the app is in [PROTOCOL.md](PROTOCOL.md) (version 2).
+The watch advertises as `Porozit Watch XXXX` with service `0xFFF0`.
 
-## Hardver
+| File | What |
+|---|---|
+| `main/ble_service.c` | NimBLE GATT service, advertising, notify |
+| `main/ble_protocol.c` | protocol v2: commands, config, info/state/battery messages |
+| `main/measure.c` | measurement state machine and the `measurement` events |
+| `main/watch_settings.c` | settings shared with the app (validate, store in NVS, apply) |
 
-| Komponens | Típus |
-|-----------|-------|
-| Mikrokontroller | ESP32-S3 |
-| Kijelző | TFT LCD érintőképernyővel |
-| Érintésvezérlő | CST816S |
+## Build
 
-## Projekt struktúra
+ESP-IDF **v6.0.1**, target `esp32s3`:
 
-```
-├── CMakeLists.txt             Projekt konfiguráció
-├── main/
-│   ├── main.c                 Fő alkalmazás belépési pont
-│   ├── display_driver.c/h     Kijelző meghajtó
-│   ├── touch_driver.c/h       Érintőképernyő meghajtó
-│   ├── battery_monitor.c/h    Akkumulátor figyelés
-│   ├── power_manager.c/h      Energiagazdálkodás
-│   ├── lv_conf.h              LVGL konfiguráció
-│   └── ui/                    Felhasználói felület (SquareLine Studio)
-├── managed_components/        ESP-IDF komponensek
-└── README.md                  Ez a fájl
-```
-
-## Fordítás és telepítés
-
-### Előfeltételek
-
-- ESP-IDF v5.x telepítve
-- ESP32-S3 fejlesztői kártya
-
-### Lépések
-
-1. Nyisd meg a projektet VS Code-ban ESP-IDF extension-nel
-2. Válaszd ki a megfelelő COM portot
-3. Fordítás: `ESP-IDF: Build`
-4. Feltöltés: `ESP-IDF: Flash`
-5. Monitor: `ESP-IDF: Monitor`
-
-Vagy parancssorból:
 ```bash
+idf.py set-target esp32s3   # first time only
 idf.py build
 idf.py -p PORT flash monitor
 ```
 
-## Hibaelhárítás
+GitHub Actions builds every push and keeps the binaries as the *porozit-watch-firmware* artifact.
 
-* **Feltöltési hiba**
-    * Ellenőrizd a hardver csatlakozást: `idf.py -p PORT monitor` futtatásával
-    * Csökkentsd az átviteli sebességet a `menuconfig` menüben
+The UI is designed in SquareLine Studio (`squareline/`) and exported to `main/ui/`. Custom code
+lives outside `main/ui/` so a re-export does not overwrite it.
 
-## Licensz
+## License
 
-[MIT License](LICENSE)
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-idf/issues)
-
-We will get back to you as soon as possible.
+[MIT](LICENSE)

@@ -5,7 +5,6 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "ui_screens.h"
-#include "watch_settings.h"
 
 #if CONFIG_BT_NIMBLE_ENABLED
 
@@ -23,9 +22,13 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
+#include <stdio.h>
 #include <string.h>
 
-#define BLE_DEVICE_NAME "Porozit Watch"
+#include "esp_mac.h"
+
+/* "Porozit Watch 1A2B": the last two MAC bytes tell units apart (PROTOCOL.md) */
+#define BLE_DEVICE_NAME_PREFIX "Porozit Watch"
 /* Longest value this service reads or notifies. The preferred ATT MTU is 256
  * (CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU), and a notification can carry MTU - 3
  * bytes, so 244 stays inside a single packet while leaving room for a smaller
@@ -48,29 +51,6 @@ static size_t ble_value_len;
 static uint8_t ble_rx_buf[BLE_MAX_VALUE_LEN];
 static bool ble_initialized;
 static bool ble_low_power;
-static QueueHandle_t settings_write_queue;
-
-typedef struct {
-    uint16_t conn_handle;
-    size_t length;
-    char payload[BLE_MAX_VALUE_LEN + 1];
-} settings_write_t;
-
-static void settings_write_task(void *arg)
-{
-    (void)arg;
-    settings_write_t write;
-    while (true) {
-        if (xQueueReceive(settings_write_queue, &write, portMAX_DELAY) != pdTRUE) continue;
-        bool applied = watch_settings_apply_json(write.payload, write.length);
-        const char *reply = applied ? "OK" : "ERROR";
-        if (write.conn_handle == ble_conn_handle) {
-            esp_err_t err = ble_service_notify((const uint8_t *)reply, strlen(reply));
-            if (err != ESP_OK) ESP_LOGW(TAG, "Could not notify settings reply: %s", esp_err_to_name(err));
-        }
-    }
-}
-
 static void ble_app_advertise(void);
 static int ble_gap_event(struct ble_gap_event *event, void *arg);
 
@@ -178,6 +158,12 @@ static void ble_app_advertise(void)
     fields.name_len = strlen(name);
     fields.name_is_complete = 1;
 
+    /* Lets the app recognise a Porozit by its service, not only by name */
+    static const ble_uuid16_t service_uuid = BLE_UUID16_INIT(0xFFF0);
+    fields.uuids16 = &service_uuid;
+    fields.num_uuids16 = 1;
+    fields.uuids16_is_complete = 1;
+
     rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
         ESP_LOGE(TAG, "ble_gap_adv_set_fields failed: %d", rc);
@@ -278,7 +264,11 @@ esp_err_t ble_service_init(void)
     ble_svc_gap_init();
     ble_svc_gatt_init();
 
-    ble_svc_gap_device_name_set(BLE_DEVICE_NAME);
+    uint8_t mac[6] = { 0 };
+    esp_read_mac(mac, ESP_MAC_BT);
+    static char device_name[24];
+    snprintf(device_name, sizeof(device_name), "%s %02X%02X", BLE_DEVICE_NAME_PREFIX, mac[4], mac[5]);
+    ble_svc_gap_device_name_set(device_name);
 
     ble_hs_cfg.reset_cb = ble_on_reset;
     ble_hs_cfg.sync_cb = ble_on_sync;
@@ -295,13 +285,6 @@ esp_err_t ble_service_init(void)
     if (rc != 0) {
         ESP_LOGE(TAG, "ble_gatts_add_svcs failed: %d", rc);
         return ESP_FAIL;
-    }
-
-    settings_write_queue = xQueueCreate(4, sizeof(settings_write_t));
-    if (settings_write_queue == NULL ||
-        xTaskCreate(settings_write_task, "settings_write", 6144, NULL, 3, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Could not start settings worker");
-        return ESP_ERR_NO_MEM;
     }
 
     nimble_port_freertos_init(ble_host_task);

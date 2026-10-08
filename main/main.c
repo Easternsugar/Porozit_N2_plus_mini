@@ -93,25 +93,10 @@ static void ble_heartbeat_task(void *param)
     (void)param;
 
     while (1) {
-        battery_status_t battery;
-        char json[128];
-
-        /* Reuse the sample taken by the battery UI task instead of hitting the
-         * ADC from two tasks (adc_oneshot_read() fails if the unit is busy). */
-        battery_monitor_get_status(&battery);
-
-        if (battery.valid) {
-            int len = snprintf(
-                json,
-                sizeof(json),
-                "{\"command\":\"heartbeat\",\"battery\":%d,\"charging\":%s}",
-                battery.percentage,
-                battery.charging ? "true" : "false"
-            );
-
-            if (len > 0 && (size_t)len < sizeof(json)) {
-                ble_service_notify((const uint8_t *)json, (size_t)len);
-            }
+        /* Protocol v2 "battery" message; it reuses the battery UI task's sample
+         * instead of hitting the ADC from two tasks. */
+        if (ble_service_can_notify()) {
+            ble_protocol_send_battery();
         }
 
         vTaskDelay(pdMS_TO_TICKS(10000));
@@ -235,20 +220,9 @@ void app_main(void)
     settings_t settings;
     esp_err_t settings_ret = nvs_settings_load(&settings);
     if(settings_ret == ESP_OK){
+        /* The device-only beep on/off switch. Everything the phone can change
+         * (timeouts, levels, unit, language) is applied by watch_settings_init(). */
         buzzer_set_enabled(settings.beep_enabled);
-
-        /* The phone can change the idle timeout over BLE, so it has to be
-         * restored here instead of staying at the compiled-in default. */
-        static const uint16_t sleep_timer_minutes[] = { 5, 10, 30 };
-        const uint8_t sleep_index =
-            (settings.sleep_timer < (sizeof(sleep_timer_minutes) / sizeof(sleep_timer_minutes[0])))
-                ? settings.sleep_timer : 0;
-        power_save_set_timeout_ms(sleep_timer_minutes[sleep_index] * 60U * 1000U);
-
-        display_set_brightness_level(settings.brightness);
-        buzzer_set_volume_level(settings.volume);
-        measure_set_unit((settings.measurement_unit == 1) ? MEASURE_UNIT_PMA
-                                                          : MEASURE_UNIT_TIME);
 
         ESP_LOGI(TAG, "Settings restored: beep=%d, lang=%s, beepTimer=%u, "
                       "sleepTimer=%u, brightness=%u, volume=%u",

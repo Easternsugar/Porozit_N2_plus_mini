@@ -1,10 +1,21 @@
+/**
+ * @file watch_settings.c
+ * @brief Settings shared with the Porozit app (PROTOCOL.md, "config")
+ *
+ * The single place where the phone's settings are validated, stored and
+ * applied. NVS keeps the beep and sleep delays as table indices and volume /
+ * brightness as native levels; the protocol speaks seconds and percent, and
+ * the conversions live here.
+ */
+
 #include "watch_settings.h"
 
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <strings.h>
 
-#include "cJSON.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -22,13 +33,10 @@ static volatile uint16_t s_beep_timer_s;
 static volatile uint32_t s_next_beep_ms;
 static TaskHandle_t s_beep_task;
 
-/* settings_t stores the beep and sleep delays as table indices, which is what
- * NVS round-trips. These translate between the index and the seconds the phone
- * and the runtime use. */
 static const uint16_t beep_timer_seconds[] = { 0, 60, 180, 300, 600 };
 static const uint16_t sleep_timer_seconds[] = { 300, 600, 1800 };
 
-#define WATCH_SETTINGS_COUNT(array) (sizeof(array) / sizeof((array)[0]))
+#define COUNT_OF(array) (sizeof(array) / sizeof((array)[0]))
 
 static uint16_t index_to_seconds(const uint16_t *table, size_t count, uint8_t index)
 {
@@ -38,7 +46,7 @@ static uint16_t index_to_seconds(const uint16_t *table, size_t count, uint8_t in
 static bool seconds_to_index(const uint16_t *table, size_t count, int seconds, uint8_t *index)
 {
     for (size_t i = 0; i < count; i++) {
-        if (table[i] == (uint16_t)seconds) {
+        if (table[i] == seconds) {
             *index = (uint8_t)i;
             return true;
         }
@@ -46,13 +54,23 @@ static bool seconds_to_index(const uint16_t *table, size_t count, int seconds, u
     return false;
 }
 
+/* 0-100 % <-> native level 0..max, rounded to the nearest level */
+static uint8_t percent_to_level(int percent, uint8_t max)
+{
+    return (uint8_t)((percent * max + 50) / 100);
+}
+
+static int level_to_percent(uint8_t level, uint8_t max)
+{
+    return max == 0 ? 0 : (level * 100 + max / 2) / max;
+}
+
 static void apply_runtime(const settings_t *settings)
 {
     buzzer_set_volume_level(settings->volume);
     display_set_brightness_level(settings->brightness);
 
-    power_save_set_timeout(index_to_seconds(sleep_timer_seconds,
-                                            WATCH_SETTINGS_COUNT(sleep_timer_seconds),
+    power_save_set_timeout(index_to_seconds(sleep_timer_seconds, COUNT_OF(sleep_timer_seconds),
                                             settings->sleep_timer));
 
     measure_set_unit_pma(settings->measurement_unit != 0);
@@ -60,8 +78,7 @@ static void apply_runtime(const settings_t *settings)
     i18n_select_lang_by_code(settings->lang);
     i18n_apply_ui();
 
-    const uint16_t beep_seconds = index_to_seconds(beep_timer_seconds,
-                                                   WATCH_SETTINGS_COUNT(beep_timer_seconds),
+    const uint16_t beep_seconds = index_to_seconds(beep_timer_seconds, COUNT_OF(beep_timer_seconds),
                                                    settings->beep_timer);
     s_next_beep_ms = (uint32_t)(esp_timer_get_time() / 1000) + (uint32_t)beep_seconds * 1000U;
     s_beep_timer_s = beep_seconds;
@@ -94,92 +111,114 @@ esp_err_t watch_settings_init(void)
     return ESP_OK;
 }
 
-static bool valid_integer(const cJSON *value, int min, int max)
+static bool as_whole_number(const cJSON *value, int *out)
 {
-    return cJSON_IsNumber(value) && isfinite(value->valuedouble) &&
-           value->valuedouble == (double)value->valueint &&
-           value->valueint >= min && value->valueint <= max;
+    if (!cJSON_IsNumber(value) || !isfinite(value->valuedouble) ||
+        value->valuedouble != floor(value->valuedouble)) {
+        return false;
+    }
+    *out = (int)value->valuedouble;
+    return true;
 }
 
-bool watch_settings_apply_json(const char *payload, size_t length)
+bool watch_settings_apply(const cJSON *root, const char **error)
 {
-    if (payload == NULL || length == 0 || length > 128) return false;
-    char json[129];
-    memcpy(json, payload, length);
-    json[length] = '\0';
-    cJSON *root = cJSON_ParseWithOpts(json, NULL, true);
-    if (!cJSON_IsObject(root)) {
-        cJSON_Delete(root);
-        return false;
-    }
-
-    const cJSON *version = cJSON_GetObjectItemCaseSensitive(root, "version");
-    const cJSON *type = cJSON_GetObjectItemCaseSensitive(root, "type");
-    if (!valid_integer(version, 1, 1) || !cJSON_IsString(type) ||
-        strcmp(type->valuestring, "config") != 0 || cJSON_GetArraySize(root) != 3) {
-        cJSON_Delete(root);
-        return false;
-    }
+    static const char *const languages[] = { "en", "hu", "de", "es", "fr" };
 
     settings_t next;
     if (nvs_settings_load(&next) != ESP_OK) {
-        cJSON_Delete(root);
+        *error = "settings storage unavailable";
         return false;
     }
 
-    bool valid = false;
-    const cJSON *value = NULL;
-    if ((value = cJSON_GetObjectItemCaseSensitive(root, "measurementUnit")) != NULL) {
-        if (cJSON_IsString(value)) {
-            measure_unit_t unit;
-            if (measure_unit_from_name(value->valuestring, &unit)) {
-                next.measurement_unit = (unit == MEASURE_UNIT_PMA) ? 1 : 0;
-                valid = true;
+    /* Validate every key into a copy first: all or nothing. */
+    unsigned changed = 0;
+    const cJSON *value;
+    int number;
+
+    if ((value = cJSON_GetObjectItemCaseSensitive(root, "unit")) != NULL) {
+        measure_unit_t unit;
+        if (!cJSON_IsString(value) || !measure_unit_from_name(value->valuestring, &unit)) {
+            *error = "unit: expected \"sec\" or \"pma\"";
+            return false;
+        }
+        next.measurement_unit = (unit == MEASURE_UNIT_PMA) ? 1 : 0;
+        changed++;
+    }
+    if ((value = cJSON_GetObjectItemCaseSensitive(root, "beep")) != NULL) {
+        if (!as_whole_number(value, &number) ||
+            !seconds_to_index(beep_timer_seconds, COUNT_OF(beep_timer_seconds), number, &next.beep_timer)) {
+            *error = "beep: expected one of 0,60,180,300,600";
+            return false;
+        }
+        changed++;
+    }
+    if ((value = cJSON_GetObjectItemCaseSensitive(root, "sleep")) != NULL) {
+        if (!as_whole_number(value, &number) ||
+            !seconds_to_index(sleep_timer_seconds, COUNT_OF(sleep_timer_seconds), number, &next.sleep_timer)) {
+            *error = "sleep: expected one of 300,600,1800";
+            return false;
+        }
+        changed++;
+    }
+    if ((value = cJSON_GetObjectItemCaseSensitive(root, "volume")) != NULL) {
+        if (!as_whole_number(value, &number) || number < 0 || number > 100) {
+            *error = "volume: expected 0-100";
+            return false;
+        }
+        next.volume = percent_to_level(number, BUZZER_VOLUME_LEVEL_MAX);
+        changed++;
+    }
+    if ((value = cJSON_GetObjectItemCaseSensitive(root, "brightness")) != NULL) {
+        if (!as_whole_number(value, &number) || number < 0 || number > 100) {
+            *error = "brightness: expected 0-100";
+            return false;
+        }
+        next.brightness = percent_to_level(number, DISPLAY_BRIGHTNESS_LEVEL_MAX);
+        changed++;
+    }
+    if ((value = cJSON_GetObjectItemCaseSensitive(root, "language")) != NULL) {
+        bool known = false;
+        for (size_t i = 0; cJSON_IsString(value) && i < COUNT_OF(languages); i++) {
+            if (strcasecmp(value->valuestring, languages[i]) == 0) {
+                snprintf(next.lang, sizeof(next.lang), "%s", languages[i]);
+                known = true;
             }
         }
-    } else if ((value = cJSON_GetObjectItemCaseSensitive(root, "beepTimer")) != NULL) {
-        if (valid_integer(value, 0, 600) &&
-            seconds_to_index(beep_timer_seconds,
-                             WATCH_SETTINGS_COUNT(beep_timer_seconds),
-                             value->valueint, &next.beep_timer)) {
-            next.beep_enabled = (value->valueint != 0);
-            valid = true;
+        if (!known) {
+            *error = "language: expected en, hu, de, es or fr";
+            return false;
         }
-    } else if ((value = cJSON_GetObjectItemCaseSensitive(root, "sleepTimer")) != NULL) {
-        if (valid_integer(value, 300, 1800) &&
-            seconds_to_index(sleep_timer_seconds,
-                             WATCH_SETTINGS_COUNT(sleep_timer_seconds),
-                             value->valueint, &next.sleep_timer)) {
-            valid = true;
-        }
-    } else if ((value = cJSON_GetObjectItemCaseSensitive(root, "volume")) != NULL) {
-        if (valid_integer(value, 0, BUZZER_VOLUME_LEVEL_MAX)) {
-            next.volume = (uint8_t)value->valueint;
-            valid = true;
-        }
-    } else if ((value = cJSON_GetObjectItemCaseSensitive(root, "brightness")) != NULL) {
-        if (valid_integer(value, 0, DISPLAY_BRIGHTNESS_LEVEL_MAX)) {
-            next.brightness = (uint8_t)value->valueint;
-            valid = true;
-        }
-    } else if ((value = cJSON_GetObjectItemCaseSensitive(root, "langSelector")) != NULL) {
-        if (cJSON_IsString(value) &&
-            (strcmp(value->valuestring, "en") == 0 || strcmp(value->valuestring, "hu") == 0 ||
-             strcmp(value->valuestring, "de") == 0 || strcmp(value->valuestring, "es") == 0 ||
-             strcmp(value->valuestring, "fr") == 0)) {
-            strcpy(next.lang, value->valuestring);
-            valid = true;
-        }
+        changed++;
     }
 
-    cJSON_Delete(root);
-    if (!valid) return false;
+    if (changed == 0) {
+        *error = "no known config key";
+        return false;
+    }
 
     esp_err_t err = nvs_settings_save(&next);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Could not persist config: %s", esp_err_to_name(err));
+        *error = "could not store settings";
         return false;
     }
     apply_runtime(&next);
+    ESP_LOGI(TAG, "Config applied: %u key(s)", changed);
     return true;
+}
+
+int watch_settings_config_json(char *buf, size_t size)
+{
+    settings_t s;
+    nvs_settings_load(&s);
+    return snprintf(buf, size,
+                    "{\"version\":2,\"type\":\"config\",\"unit\":\"%s\",\"beep\":%u,\"sleep\":%u,"
+                    "\"volume\":%d,\"brightness\":%d,\"language\":\"%s\"}",
+                    s.measurement_unit ? "pma" : "sec",
+                    (unsigned)index_to_seconds(beep_timer_seconds, COUNT_OF(beep_timer_seconds), s.beep_timer),
+                    (unsigned)index_to_seconds(sleep_timer_seconds, COUNT_OF(sleep_timer_seconds), s.sleep_timer),
+                    level_to_percent(s.volume, BUZZER_VOLUME_LEVEL_MAX),
+                    level_to_percent(s.brightness, DISPLAY_BRIGHTNESS_LEVEL_MAX),
+                    s.lang);
 }

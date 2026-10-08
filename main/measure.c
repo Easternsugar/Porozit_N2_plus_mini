@@ -23,6 +23,7 @@
 #include "buzzer.h"
 #include "i18n.h"
 #include "power_save.h"
+#include "ble_protocol.h"
 #include "ble_service.h"
 #include "nvs_storage.h"
 
@@ -37,6 +38,8 @@
 
 #define MEASURE_MIN_TIME_S       0.3f
 #define MEASURE_UPDATE_MS        10
+/* Live timer notifications to the phone while measuring (PROTOCOL.md "progress") */
+#define MEASURE_PROGRESS_US      500000
 
 #define MEASURE_PMA_FACTOR        7500.0f
 #define MEASURE_PMA_MAX           9999.0f
@@ -70,6 +73,8 @@ typedef enum {
 	MEASURE_EVT_DELETE,
 	/** The BLE link came up or went away, the Save button has to follow */
 	MEASURE_EVT_LINK,
+	/** Clear the saved-results counter (phone "reset" command) */
+	MEASURE_EVT_RESET,
 } measure_evt_type_t;
 
 typedef struct {
@@ -97,6 +102,42 @@ typedef struct {
 static QueueHandle_t s_measure_queue;
 static TaskHandle_t s_measure_task;
 static measure_state_t s_state;
+static int64_t s_last_progress_us;
+
+/**
+ * @brief Send a protocol v2 "measurement" event to the phone (PROTOCOL.md)
+ * @param time_s Seconds to include, or a negative value to leave "time" out
+ * @param count  Saved count to include, or a negative value to leave it out
+ * @param reason Error reason to include, or NULL
+ */
+static void measure_send_event(const char *event, float time_s, int count, const char *reason)
+{
+	if (!ble_service_can_notify()) {
+		return;
+	}
+
+	char json[128];
+	int len = snprintf(json, sizeof(json), "{\"version\":2,\"type\":\"measurement\",\"event\":\"%s\"", event);
+	if (time_s >= 0.0f) {
+		len += snprintf(json + len, sizeof(json) - len, ",\"time\":%.3f", (double)time_s);
+	}
+	if (count >= 0) {
+		len += snprintf(json + len, sizeof(json) - len, ",\"count\":%d", count);
+	}
+	if (reason != NULL) {
+		len += snprintf(json + len, sizeof(json) - len, ",\"reason\":\"%s\"", reason);
+	}
+	len += snprintf(json + len, sizeof(json) - len, "}");
+
+	if (len <= 0 || (size_t)len >= sizeof(json)) {
+		ESP_LOGE(TAG, "Event '%s' did not fit the buffer", event);
+		return;
+	}
+	esp_err_t err = ble_service_notify((const uint8_t *)json, (size_t)len);
+	if (err != ESP_OK) {
+		ESP_LOGW(TAG, "BLE notify of '%s' failed: %s", event, esp_err_to_name(err));
+	}
+}
 /* Boolean front end for the same setting, used by watch_settings.c. There is
  * only one piece of state behind both spellings, see measure_set_unit(). */
 void measure_set_unit_pma(bool enabled)
@@ -215,6 +256,40 @@ bool measure_request_save(void)
 bool measure_request_delete(void)
 {
 	return measure_request(MEASURE_EVT_DELETE);
+}
+
+bool measure_request_reset(void)
+{
+	if (s_measure_queue == NULL || s_state.measuring) {
+		return false;
+	}
+	measure_evt_t evt = {
+		.type = MEASURE_EVT_RESET,
+		.gpio = GPIO_NUM_NC,
+	};
+	return xQueueSend(s_measure_queue, &evt, 0) == pdTRUE;
+}
+
+int measure_state_json(char *buf, size_t size)
+{
+	/* Read from another task; every field is a single aligned word, so a torn
+	 * snapshot can at worst be one step stale, which the next event fixes. */
+	const char *state = "idle";
+	float time_s = 0.0f;
+	if (s_state.measuring) {
+		state = "measuring";
+		time_s = s_state.measure_time_s;
+	} else if (s_state.measure_error) {
+		state = "error";
+	} else if (!s_state.allow_measure && s_state.last_measure_s > 0.0f) {
+		state = "result";
+		time_s = s_state.last_measure_s;
+	}
+	return snprintf(buf, size,
+					"{\"version\":2,\"type\":\"state\",\"state\":\"%s\",\"time\":%.3f,"
+					"\"count\":%u,\"plugged\":%s}",
+					state, (double)time_s, (unsigned)s_state.meas_count,
+					s_state.plugged ? "true" : "false");
 }
 
 void measure_save_event(lv_event_t *e)
@@ -478,19 +553,8 @@ static void measure_start(measure_state_t *state, int64_t now_us)
 		measure_ui_set_save_delete_enabled(false);
 	}
 
-	char json[96];
-	int64_t timestamp_ms = now_us / 1000;
-	int len = snprintf(json, sizeof(json),
-					   "{\"version\":1, \"type\":\"measurement\", \"alert\":\"started\", \"timestamp\":%lld}",
-					   (long long)timestamp_ms);
-	if (len > 0 && (size_t)len < sizeof(json)) {
-		esp_err_t err = ble_service_notify((const uint8_t *)json, (size_t)len);
-		if (err == ESP_OK) {
-			ESP_LOGI(TAG, "Measurement sent via BLE: %s", json);
-		} else {
-			ESP_LOGW(TAG, "BLE notify failed: %s", esp_err_to_name(err));
-		}
-	}
+	s_last_progress_us = now_us;
+	measure_send_event("started", -1.0f, -1, NULL);
 
 	measure_ui_update_time(state, 0.0f);
 	ESP_LOGI(TAG, "Measurement started");
@@ -532,19 +596,13 @@ static void measure_finalize(measure_state_t *state, bool error, int64_t now_us)
 
 	nvs_measurement_save((const float)state->last_measure_s);
 
-	char json[120];
-	int64_t timestamp_ms = now_us / 1000;
-	int len = snprintf(json, sizeof(json),
-					   "{\"version\":1, \"type\":\"measurement\", \"alert\":\"done\", \"time\":\"%.6f\", \"timestamp\":%lld}",
-					   (double)state->last_measure_s,
-					   (long long)timestamp_ms);
-	if (len > 0 && (size_t)len < sizeof(json)) {
-		esp_err_t err = ble_service_notify((const uint8_t *)json, (size_t)len);
-		if (err == ESP_OK) {
-			ESP_LOGI(TAG, "Measurement sent via BLE: %s", json);
-		} else {
-			ESP_LOGW(TAG, "BLE notify failed: %s", esp_err_to_name(err));
-		}
+	if (error) {
+		measure_send_event("error", -1.0f, -1, "unplugged");
+	} else if (state->last_measure_s > 0.0f) {
+		measure_send_event("done", state->last_measure_s, -1, NULL);
+	} else {
+		/* Too short to count: tell the phone the device is idle again */
+		ble_protocol_send_state();
 	}
 
 	ESP_LOGI(TAG, "Measurement %s (%.3f s)", error ? "error" : "done", (double)elapsed);
@@ -597,25 +655,12 @@ static void measure_handle_save(measure_state_t *state, int64_t now_us)
 		return;
 	}
 
-	/* Send measurement time via BLE before resetting state */
-	char json[96];
-	int64_t timestamp_ms = now_us / 1000;
-	int len = snprintf(json, sizeof(json),
-					   "{\"version\":1, \"type\":\"measurement\", \"alert\":\"save\", \"time\":%.6f, \"timestamp\":%lld}",
-					   (double)state->last_measure_s,
-					   (long long)timestamp_ms);
-	if (len > 0 && (size_t)len < sizeof(json)) {
-		esp_err_t err = ble_service_notify((const uint8_t *)json, (size_t)len);
-		if (err == ESP_OK) {
-			ESP_LOGI(TAG, "Measurement sent via BLE: %s", json);
-		} else {
-			ESP_LOGW(TAG, "BLE notify failed: %s", esp_err_to_name(err));
-		}
-	}
+	const float saved_s = state->last_measure_s;
 
 	if (state->meas_count < MEASURE_COUNT_MAX) {
 		state->meas_count++;
 	}
+	measure_send_event("save", saved_s, (int)state->meas_count, NULL);
 
 	state->last_measure_s = 0.0f;
 	state->measure_error = false;
@@ -663,19 +708,7 @@ static void measure_handle_delete(measure_state_t *state, int64_t now_us)
 		measure_ui_set_save_delete_enabled(false);
 	}
 
-	char json[96];
-	int64_t timestamp_ms = now_us / 1000;
-	int len = snprintf(json, sizeof(json),
-					   "{\"version\":1, \"type\":\"measurement\", \"alert\":\"delete\", \"timestamp\":%lld}",
-					   (long long)timestamp_ms);
-	if (len > 0 && (size_t)len < sizeof(json)) {
-		esp_err_t err = ble_service_notify((const uint8_t *)json, (size_t)len);
-		if (err == ESP_OK) {
-			ESP_LOGI(TAG, "Measurement sent via BLE: %s", json);
-		} else {
-			ESP_LOGW(TAG, "BLE notify failed: %s", esp_err_to_name(err));
-		}
-	}
+	measure_send_event("delete", -1.0f, -1, NULL);
 
 	measure_ui_update_alert(state);
 
@@ -707,6 +740,12 @@ static void measure_handle_event(measure_state_t *state, const measure_evt_t *ev
 	case MEASURE_EVT_LINK:
 		measure_ui_set_save_delete_enabled(state->save_delete_enabled);
 		break;
+	case MEASURE_EVT_RESET:
+		state->meas_count = 0;
+		measure_ui_update_count(state);
+		measure_send_event("reset", -1.0f, -1, NULL);
+		ESP_LOGI(TAG, "Saved-results counter reset");
+		break;
 	default:
 		break;
 	}
@@ -734,6 +773,11 @@ static void measure_task(void *param)
 			int64_t now_us = esp_timer_get_time();
 			float elapsed = (float)(now_us - s_state.measure_start_us) / 1000000.0f;
 			s_state.measure_time_s = elapsed;
+
+			if (now_us - s_last_progress_us >= MEASURE_PROGRESS_US) {
+				s_last_progress_us = now_us;
+				measure_send_event("progress", elapsed, -1, NULL);
+			}
 
 			uint32_t tenths = (uint32_t)(elapsed * 10.0f + 0.5f);
 			if (tenths != s_state.last_display_tenths) {
