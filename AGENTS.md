@@ -1,10 +1,10 @@
-# SarkanyWatch firmware – agent notes
+# Porozit Watch firmware – agent notes
 
 This ESP-IDF repository is the device half of the HELLO project. The Android app lives in the sibling repository `../HELLO`. These are separate Git repositories; check and commit them separately. `BLE_JSON_PROTOCOL.md` describes the currently implemented wire format, but verify protocol changes against `main/ble_service.c`, `main/measure.c`, and `main/watch_settings.c`.
 
 ## BLE contract with the app
 
-- The device advertises as `SarkanyWatch` with service `0xFFF0` and read/write/notify characteristic `0xFFF1`. Notifications require an active connection and CCCD subscription. `ble_service_notify()` rejects payloads over 128 bytes.
+- The device advertises as `Porozit Watch` with service `0xFFF0` and read/write/notify characteristic `0xFFF1`. Notifications require an active connection and CCCD subscription. `ble_service_notify()` rejects payloads over 128 bytes.
 - Measurement notifications have `version:1`, `type:"measurement"`, and `alert:"started"|"done"|"save"|"delete"`. `done.time` is a string, `save.time` is a number; both are seconds. `timestamp` is uptime milliseconds, not wall-clock time. `done` is a preview in the app; `save` is the explicit ESP save event.
 - The heartbeat is `{"command":"heartbeat","battery":N,"charging":BOOLEAN}` and has no version field.
 - The firmware accepts one setting per write: `{"version":1,"type":"config",KEY:VALUE}`. Valid keys and ranges are in `BLE_JSON_PROTOCOL.md` and `main/watch_settings.c`. `volume` and `brightness` are native levels 0–5; timers are in seconds.

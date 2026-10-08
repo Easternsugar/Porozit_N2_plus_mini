@@ -25,7 +25,7 @@
 
 #include <string.h>
 
-#define BLE_DEVICE_NAME "SarkanyWatch"
+#define BLE_DEVICE_NAME "Porozit Watch"
 /* Longest value this service reads or notifies. The preferred ATT MTU is 256
  * (CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU), and a notification can carry MTU - 3
  * bytes, so 244 stays inside a single packet while leaving room for a smaller

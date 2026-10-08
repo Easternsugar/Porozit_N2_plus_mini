@@ -6,7 +6,7 @@ Ez a dokumentum a firmware **jelenlegi kódjában ténylegesen megvalósított**
 
 | Elem | Érték |
 | --- | --- |
-| Eszköz neve | `SarkanyWatch` |
+| Eszköz neve | `Porozit Watch` |
 | GATT-szolgáltatás | `0xFFF0` |
 | Karakterisztika | `0xFFF1` — olvasás, írás és értesítés (Notify) |
 | Kódolás | Az alábbi kimenő JSON-ok UTF-8 bájtok |

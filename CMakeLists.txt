@@ -5,4 +5,4 @@ cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # Disabled minimal build so menuconfig exposes Bluetooth/NimBLE options.
 idf_build_set_property(MINIMAL_BUILD OFF)
-project(sarkany_watch)
+project(porozit_watch)

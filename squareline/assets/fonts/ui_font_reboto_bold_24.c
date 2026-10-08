@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 24 px
  * Bpp: 4
- * Opts: --bpp 4 --size 24 --font C:/Users/kincs/Documents/esp32/esp32_sarkany_watch/squareline/assets/fonts/Roboto-Bold.ttf -o C:/Users/kincs/Documents/esp32/esp32_sarkany_watch/squareline/assets/fonts\ui_font_reboto_bold_24.c --format lvgl -r 0x20-0x7f --no-compress --no-prefilter
+ * Opts: --bpp 4 --size 24 --font C:/Users/kincs/Documents/esp32/Porozit_Watch_Firmware/squareline/assets/fonts/Roboto-Bold.ttf -o C:/Users/kincs/Documents/esp32/Porozit_Watch_Firmware/squareline/assets/fonts\ui_font_reboto_bold_24.c --format lvgl -r 0x20-0x7f --no-compress --no-prefilter
  ******************************************************************************/
 
 #include "../ui.h"
