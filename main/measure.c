@@ -151,7 +151,7 @@ bool measure_is_unit_pma(void)
 }
 
 static void measure_task(void *param);
-static void IRAM_ATTR measure_gpio_isr_handler(void *arg);
+static void measure_gpio_isr_handler(void *arg);
 static void measure_handle_event(measure_state_t *state, const measure_evt_t *evt, int64_t now_us);
 static void measure_handle_gpio(measure_state_t *state, gpio_num_t gpio, int64_t now_us);
 static void measure_handle_save(measure_state_t *state, int64_t now_us);
