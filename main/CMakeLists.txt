@@ -17,5 +17,5 @@ idf_component_register(SRCS "watch_settings.c" "ble_protocol.c" "battery_ui.c" "
                        # cJSON is NOT the old "json" component: ESP-IDF 6.0 moved it out of the
                        # core tree into the registry, so it comes from idf_component.yml
                        # (espressif/cjson) and its CMake name is espressif__cjson.
-                       PRIV_REQUIRES esp_app_format spi_flash esp_adc esp_driver_ledc esp_driver_i2c esp_lcd nvs_flash bt espressif__cjson
+                       PRIV_REQUIRES lvgl esp_lvgl_port esp_app_format spi_flash esp_adc esp_driver_ledc esp_driver_i2c esp_lcd nvs_flash bt espressif__cjson
                        INCLUDE_DIRS "." "ui")

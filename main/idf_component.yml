@@ -1,9 +1,8 @@
 ## IDF Component Manager Manifest File
 dependencies:
+  # lvgl and esp_lvgl_port are vendored in components/ (see components/README.md)
   espressif/cjson: "1.7.19~2"
   espressif/esp_lcd_touch_cst816s: "1.0.3"
-  lvgl/lvgl: "^8.4.0"
-  espressif/esp_lvgl_port: "^2.3.3"
   ## Required IDF version
   idf:
     version: ">=4.1.0"
