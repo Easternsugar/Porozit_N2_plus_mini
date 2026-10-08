@@ -41,7 +41,7 @@ which keeps nothing and relies on the app). `serial` may be empty.
 | `idle` | ready, waiting for the trigger |
 | `measuring` | timer running (`time` = elapsed so far) |
 | `result` | finished, waiting for Save or Delete (`time` = the result) |
-| `error` | last measurement failed (measuring head pulled out mid-measurement); cleared by plugging the head back in |
+| `error` | last measurement failed (measuring head pulled out mid-measurement). N2+: cleared by Delete. Watch: cleared by plugging the head back in |
 
 `count`: results saved so far in this session. `plugged`: measuring head connected.
 
@@ -107,7 +107,8 @@ On `status` and every 10 seconds.
 {"version":2,"type":"command","action":"status"}
 {"version":2,"type":"config","unit":"pma","brightness":60}
 ```
-- `save` / `delete` act exactly like the buttons on the device: only in `result`. Answered by a `result`, and on success also by the matching `measurement` event.
+- `save` / `delete` act exactly like the buttons on the device: only in `result` (N2+: delete also in
+  `error`). On the N2+ `save` fails with "storage full" when `maxSaved` results are stored. Answered by a `result`, and on success also by the matching `measurement` event.
 - `reset` clears all saved results (`measurement` `reset` event follows).
 - `config` may carry any subset of the keys above; the device validates all of them first and
   applies all or nothing, then answers with `result` and a fresh `config`.
