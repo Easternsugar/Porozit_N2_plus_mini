@@ -27,8 +27,8 @@
 
 #include "esp_mac.h"
 
-/* "Porozit Watch 1A2B": the last two MAC bytes tell units apart (PROTOCOL.md) */
-#define BLE_DEVICE_NAME_PREFIX "Porozit Watch"
+/* "Porozit N2+ mini 1A2B": the last two MAC bytes tell units apart (PROTOCOL.md) */
+#define BLE_DEVICE_NAME_PREFIX "Porozit N2+ mini"
 /* Longest value this service reads or notifies. The preferred ATT MTU is 256
  * (CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU), and a notification can carry MTU - 3
  * bytes, so 244 stays inside a single packet while leaving room for a smaller
@@ -150,8 +150,8 @@ static void ble_app_advertise(void)
 
     memset(&fields, 0, sizeof(fields));
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.tx_pwr_lvl_is_present = 1;
-    fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
+    /* No TX power field: flags (3) + 16-bit service (4) + "Porozit N2+ mini XXXX" (23)
+     * already use 30 of the 31 advertising bytes. */
 
     const char *name = ble_svc_gap_device_name();
     fields.name = (uint8_t *)name;

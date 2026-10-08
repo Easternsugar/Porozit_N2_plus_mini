@@ -1,12 +1,12 @@
-# Porozit Watch firmware – agent notes
+# Porozit N2+ mini firmware – agent notes
 
-This ESP-IDF repository is the Porozit Watch firmware. The Porozit app (Flutter) and the Porozit N2+ firmware live in separate repositories. `PROTOCOL.md` is the wire format; verify changes against `main/ble_service.c`, `main/ble_protocol.c`, `main/measure.c` and `main/watch_settings.c`.
+This ESP-IDF repository is the Porozit N2+ mini (watch-style unit) firmware. The Porozit app (Flutter) and the Porozit N2+ firmware live in separate repositories. `PROTOCOL.md` is the wire format; verify changes against `main/ble_service.c`, `main/ble_protocol.c`, `main/measure.c` and `main/watch_settings.c`.
 
 ## BLE contract with the app
 
 - The protocol is **PROTOCOL.md (version 2)**, shared word for word with the Porozit N2+ firmware and the
   Porozit app (Flutter, separate repositories). Change all three together.
-- The device advertises as `Porozit Watch XXXX` with service `0xFFF0` and read/write/notify characteristic `0xFFF1`.
+- The device advertises as `Porozit N2+ mini XXXX` with service `0xFFF0` and read/write/notify characteristic `0xFFF1`.
   Notifications need a connection, a CCCD subscription and must fit the negotiated MTU (the app requests 247).
 - `measure.c` sends the `measurement` events; `ble_protocol.c` handles commands/config and sends `info`,
   `config`, `state`, `battery` and `result`; `watch_settings.c` is the only place settings are validated,

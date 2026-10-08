@@ -16,7 +16,7 @@
   "clangd.arguments": [
     "--background-index",
     "--query-driver=**",
-    "--compile-commands-dir=c:\\Users\\user\\Documents\\esp32\\HELLO\\Porozit_Watch_Firmware\\build"
+    "--compile-commands-dir=c:\\Users\\user\\Documents\\esp32\\HELLO\\porozit_n2_plus_mini\\build"
   ],
   "idf.flashType": "UART",
   "idf.currentSetup": "C:\\esp\\v6.0.1\\esp-idf",

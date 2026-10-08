@@ -1,9 +1,9 @@
-# Porozit Watch — firmware
+# Porozit N2+ mini — firmware
 
-Firmware of the **Porozit Watch**, the wrist-size control unit of the Porozit porosity tester
+Firmware of the **Porozit N2+ mini**, the wrist-size (watch-style) control unit of the Porozit porosity tester
 (paraglider fabric air permeability) by Hello Ltd. — [porosimeter.hu](https://porosimeter.hu).
 
-The watch measures the fall time, shows it in seconds or l/m²/min (`7500 / sec`) with the
+The N2+ mini measures the fall time, shows it in seconds or l/m²/min (`7500 / sec`) with the
 Good / Acceptable / Fail colours, and sends every result to the **Porozit app** over Bluetooth LE.
 It keeps no history itself: **Save** sends the result to the phone (so it needs a connected app),
 **Delete** discards it.
@@ -20,7 +20,7 @@ It keeps no history itself: **Save** sends the result to the phone (so it needs 
 ## Bluetooth
 
 The protocol shared with the Porozit N2+ and the app is in [PROTOCOL.md](PROTOCOL.md) (version 2).
-The watch advertises as `Porozit Watch XXXX` with service `0xFFF0`.
+It advertises as `Porozit N2+ mini XXXX` with service `0xFFF0`.
 
 | File | What |
 |---|---|
@@ -39,7 +39,7 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
-GitHub Actions builds every push and keeps the binaries as the *porozit-watch-firmware* artifact.
+GitHub Actions builds every push and keeps the binaries as the *porozit-n2-mini-firmware* artifact.
 
 The UI is designed in SquareLine Studio (`squareline/`) and exported to `main/ui/`. Custom code
 lives outside `main/ui/` so a re-export does not overwrite it.

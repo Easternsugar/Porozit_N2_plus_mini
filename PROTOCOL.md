@@ -1,13 +1,13 @@
 # Porozit BLE protocol — version 2
 
-Shared by every Porozit control unit (**Porozit N2+**, **Porozit Watch**) and the **Porozit app**.
+Shared by every Porozit control unit (**Porozit N2+**, **Porozit N2+ mini**) and the **Porozit app**.
 The same file lives in all three repositories; change it in all of them together.
 
 ## Transport
 
 | Item | Value |
 |---|---|
-| Advertised name | starts with `Porozit` — `Porozit N2+ 1A2B`, `Porozit Watch 1A2B` (last 4 hex digits of the MAC) |
+| Advertised name | starts with `Porozit` — `Porozit N2+ 1A2B`, `Porozit N2+ mini 1A2B` (last 4 hex digits of the MAC) |
 | Service | `0xFFF0` (advertised) |
 | Characteristic | `0xFFF1` — read, write, notify. Device → app by **notify**, app → device by **write** |
 | Encoding | one UTF-8 JSON object per notification / write, no newline |
@@ -29,7 +29,7 @@ l/m²/min for the protocol — the app does (`l/m²/min = 7500 / sec`).
 ```json
 {"version":2,"type":"info","model":"n2","fw":"2.0.0","serial":"PZ2401-0042","maxSaved":24}
 ```
-`model`: `"n2"` or `"watch"`. `maxSaved`: how many results the device itself stores (`0` on the watch,
+`model`: `"n2"` (N2+) or `"mini"` (N2+ mini). `maxSaved`: how many results the device itself stores (`0` on the N2+ mini,
 which keeps nothing and relies on the app). `serial` may be empty.
 
 ### `state` — where the measurement cycle is
@@ -41,7 +41,7 @@ which keeps nothing and relies on the app). `serial` may be empty.
 | `idle` | ready, waiting for the trigger |
 | `measuring` | timer running (`time` = elapsed so far) |
 | `result` | finished, waiting for Save or Delete (`time` = the result) |
-| `error` | last measurement failed (measuring head pulled out mid-measurement). N2+: cleared by Delete. Watch: cleared by plugging the head back in |
+| `error` | last measurement failed (measuring head pulled out mid-measurement). N2+: cleared by Delete. N2+ mini: cleared by plugging the head back in |
 
 `count`: results saved so far in this session. `plugged`: measuring head connected.
 
@@ -74,7 +74,7 @@ One per stored result, `index` 1-based, followed by a `state`. Only devices with
 | key | values |
 |---|---|
 | `unit` | `"sec"` or `"pma"` (l/m²/min) — what the device's big number shows |
-| `beep` | reminder beep interval in seconds, `0` = off. Watch: 0, 60, 180, 300, 600. N2: also 30 |
+| `beep` | reminder beep interval in seconds, `0` = off. N2+ mini: 0, 60, 180, 300, 600. N2+: also 30 |
 | `sleep` | auto sleep after seconds of inactivity: 300, 600, 1800 |
 | `volume` | 0–100 (%), mapped to the device's levels; 0 = silent |
 | `brightness` | 0–100 (%), mapped to the device's levels |
@@ -116,7 +116,7 @@ On `status` and every 10 seconds.
 
 ## Version history
 
-- **2** — unified for N2+ and Watch: `event` instead of `alert`, numeric times, `progress` and `error`
+- **2** — unified for N2+ and N2+ mini: `event` instead of `alert`, numeric times, `progress` and `error`
   events, `info` / `state` / `battery` / `saved` messages, config in physical units (seconds, %),
-  multi-key config. Version 1 (Watch only) is no longer accepted.
-- **1** — first Watch protocol (`alert`, heartbeat without version, index-based settings).
+  multi-key config. Version 1 (N2+ mini only) is no longer accepted.
+- **1** — first N2+ mini protocol (`alert`, heartbeat without version, index-based settings).

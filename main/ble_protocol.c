@@ -72,7 +72,7 @@ static esp_err_t send_info(void)
 {
     char json[160];
     const int len = snprintf(json, sizeof(json),
-                             "{\"version\":%d,\"type\":\"info\",\"model\":\"watch\",\"fw\":\"%s\","
+                             "{\"version\":%d,\"type\":\"info\",\"model\":\"mini\",\"fw\":\"%s\","
                              "\"serial\":\"\",\"maxSaved\":0}",
                              BLE_PROTOCOL_VERSION, esp_app_get_description()->version);
     return send_json(json, len);
@@ -116,7 +116,7 @@ static void handle_command(const char *action)
     } else if (strcasecmp(action, "reset") == 0) {
         send_result("reset", measure_request_reset() ? NULL : "measurement running");
     } else if (strcasecmp(action, "list") == 0) {
-        /* The watch stores no results (maxSaved 0): nothing to list. */
+        /* The N2+ mini stores no results (maxSaved 0): nothing to list. */
         send_result("list", NULL);
         ble_protocol_send_state();
     } else if (strcasecmp(action, "status") == 0) {

@@ -18,9 +18,9 @@ jobs:
           path: .
       - uses: actions/upload-artifact@v4
         with:
-          name: porozit-watch-firmware
+          name: porozit-n2-mini-firmware
           path: |
-            build/porozit_watch.bin
+            build/porozit_n2_mini.bin
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
             build/flasher_args.json
