@@ -1,0 +1,16 @@
+{
+  "codename": "roboto_bold_20",
+  "ttf_path": "/assets/fonts/Roboto-Bold.ttf",
+  "bin_path": "/assets/fonts\\ui_font_roboto_bold_20.bin",
+  "c_path": "/assets/fonts\\ui_font_roboto_bold_20.c",
+  "cfg_path": "/assets/fonts\\ui_font_roboto_bold_20.fcfg",
+  "size": 20,
+  "bpp": 4,
+  "letters": 3,
+  "ranges": [
+    "0x20-0x017F"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}

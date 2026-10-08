@@ -1,0 +1,24 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "C:\\esp\\v6.0.1\\esp-idf",
+  "idf.pythonInstallPath": "C:\\Espressif\\tools\\python\\v6.0.1\\venv\\Scripts\\python.exe",
+  "idf.pythonBinPathWin": "C:\\Espressif\\tools\\python\\v6.0.1\\venv\\Scripts\\python.exe",
+  "idf.gitPathWin": "C:\\Program Files\\Git\\cmd\\git.exe",
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
+  ],
+  "idf.toolsPathWin": "C:\\Espressif",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32s3",
+    "IDF_PYTHON_CHECK_CONSTRAINTS": "no"
+  },
+  "clangd.path": "C:\\Espressif\\tools\\esp-clang\\esp-20.1.1_20250829\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=c:\\Users\\user\\Documents\\esp32\\HELLO\\esp32_sarkany_watch\\build"
+  ],
+  "idf.flashType": "UART",
+  "idf.currentSetup": "C:\\esp\\v6.0.1\\esp-idf",
+  "idf.port": "COM4"
+}

@@ -1,0 +1,16 @@
+{
+  "codename": "reboto_reguar_60",
+  "ttf_path": "/assets/fonts/Roboto-Regular.ttf",
+  "bin_path": "/assets/fonts\\ui_font_reboto_reguar_60.bin",
+  "c_path": "/assets/fonts\\ui_font_reboto_reguar_60.c",
+  "cfg_path": "/assets/fonts\\ui_font_reboto_reguar_60.fcfg",
+  "size": 60,
+  "bpp": 4,
+  "letters": 0,
+  "ranges": [
+    "0x20-0x7f"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}
