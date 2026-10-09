@@ -53,12 +53,15 @@ which keeps nothing and relies on the app). `serial` may be empty.
 {"version":2,"type":"measurement","event":"save","time":520.3,"count":4}
 {"version":2,"type":"measurement","event":"delete"}
 {"version":2,"type":"measurement","event":"reset"}
+{"version":2,"type":"measurement","event":"remove","index":3,"count":5}
 {"version":2,"type":"measurement","event":"error","reason":"unplugged"}
 ```
 - `progress` is sent about twice a second while measuring.
 - `save` / `delete` are sent whatever triggered them (button on the device or command from the app),
   so the app only has to follow events. `count` in `save` is the new number of saved results.
 - `reset`: all saved results were cleared.
+- `remove`: saved result `index` was removed; the later ones moved up by one (`index` stays
+  1-based and gap-free). `count` is the new number of saved results.
 - `error` `reason`: `"unplugged"` (head pulled out while measuring). The N2+ includes the partial
   `time`, which can still be saved.
 
@@ -95,8 +98,8 @@ On `status` and every 10 seconds.
 {"version":2,"type":"result","request":"save","status":"OK","message":"OK"}
 {"version":2,"type":"result","request":"config","status":"ERROR","message":"beep: expected one of 0,60,180,300,600"}
 ```
-`status` is exactly `"OK"` or `"ERROR"`. `request` is `save`, `delete`, `reset`, `list`, `config` or
-`unknown`.
+`status` is exactly `"OK"` or `"ERROR"`. `request` is `save`, `delete`, `reset`, `remove`, `list`,
+`config` or `unknown`.
 
 ## App → device
 
@@ -104,6 +107,7 @@ On `status` and every 10 seconds.
 {"version":2,"type":"command","action":"save"}
 {"version":2,"type":"command","action":"delete"}
 {"version":2,"type":"command","action":"reset"}
+{"version":2,"type":"command","action":"remove","index":3}
 {"version":2,"type":"command","action":"list"}
 {"version":2,"type":"command","action":"status"}
 {"version":2,"type":"config","unit":"pma","brightness":60}
@@ -112,12 +116,17 @@ On `status` and every 10 seconds.
   `error`, and save too once the head is plugged back in — this stores the partial time of the
   interrupted measurement (deliberate). On the N2+ `save` fails with "storage full" when `maxSaved` results are stored. Answered by a `result`, and on success also by the matching `measurement` event.
 - `reset` clears all saved results (`measurement` `reset` event follows).
+- `remove` deletes one saved result by its 1-based `index` (`measurement` `remove` event follows).
+  Only devices with `maxSaved > 0`, from N2+ firmware 2.1.0; fails with "no such result" for an
+  index that is not stored.
 - `config` may carry any subset of the keys above; the device validates all of them first and
   applies all or nothing, then answers with `result` and a fresh `config`.
 - `status` is answered by `info`, `config`, `state`, `battery` (no `result`).
 
 ## Version history
 
+- **2** (addition, no version bump) — `remove` command and event: delete one saved result (N2+
+  firmware 2.1.0).
 - **2** — unified for N2+ and N2+ mini: `event` instead of `alert`, numeric times, `progress` and `error`
   events, `info` / `state` / `battery` / `saved` messages, config in physical units (seconds, %),
   multi-key config. Version 1 (N2+ mini only) is no longer accepted.
